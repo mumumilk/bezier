@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bézier</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        place-items: center;
+        justify-content: center;
+        width: 100vw;
+        height: 100vh;
+        background-color: #212830;
+      }
+
+      #canvas {
+        image-rendering: optimizeQuality;
+        border-radius: 8px;
+        object-fit: contain;
+        border: 1px solid #334155;
+        max-width: 100%;
+      }
+
+      @media screen and (max-width: 800px) {
+        #canvas {
+          border: none;
+        }
+      }
+
+      input[type="range"] {
+        appearance: none;
+        margin-right: 15px;
+        width: 200px;
+        height: 7px;
+        background: rgba(255, 255, 255, 0.6);
+        border-radius: 5px;
+        background-color: rgba(100, 116, 139, 0.5);
+        background-size: 70% 100%;
+        background-repeat: no-repeat;
+        margin-top: 48px;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        height: 20px;
+        width: 20px;
+        border-radius: 50%;
+        background: #1b7fff;
+        cursor: ew-resize;
+      }
+
+      input[type="range"]::-webkit-slider-runnable-track {
+        -webkit-appearance: none;
+        box-shadow: none;
+        border: none;
+        background: transparent;
+      }
+
+      p {
+        display: flex;
+        color: white;
+        font-family: monospace;
+        font-size: 20px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <canvas id="canvas"></canvas>
+    <input
+      class="range-style"
+      type="range"
+      min="0"
+      max="1"
+      step="0.01"
+      id="range"
+      value="0"
+    />
+    <p>
+      t&nbsp;=&nbsp;
+      <span id="t">-</span>
+    </p>
+
+    <script>
+      /**
+       * @returns {number} random integer between min and max
+       */
+      function randomIntFromInterval(min, max) {
+        return Math.floor(Math.random() * (max - min + 1) + min);
+      }
+
+      /**
+       * linear interpolation between two points p1 and p2
+       * @param {number} p1 first point
+       * @param {number} p2 second point
+       * @param {number} t interpolation value between 0 and 1
+       * @returns {number} interpolated value
+       */
+      function lerp(p1, p2, t) {
+        return p1 + (p2 - p1) * t;
+      }
+
+      /**
+       * Calculates the linear interpolation for given set of points p1..p4
+       * @returns {array} array of the interpolated points
+       */
+      function firstDegreeLerp(p1, p2, p3, p4, t) {
+        return [
+          {
+            x: lerp(p1.x, p2.x, t),
+            y: lerp(p1.y, p2.y, t),
+          },
+          {
+            x: lerp(p2.x, p3.x, t),
+            y: lerp(p2.y, p3.y, t),
+          },
+          {
+            x: lerp(p3.x, p4.x, t),
+            y: lerp(p3.y, p4.y, t),
+          },
+        ];
+      }
+
+      /**
+       * Calculates the linear interpolation for given set of points p1..p3
+       * @returns {array} array of the interpolated points
+       */
+      function secondDegreeLerp(p1, p2, p3, t) {
+        return [
+          {
+            x: lerp(p1.x, p2.x, t),
+            y: lerp(p1.y, p2.y, t),
+          },
+          {
+            x: lerp(p2.x, p3.x, t),
+            y: lerp(p2.y, p3.y, t),
+          },
+        ];
+      }
+
+      /**
+       * Calculates the bezier curve for given set of points p1..p4
+       * @param {object} first point coordinates {x, y}
+       * @param {object} second point coordinates {x, y}
+       * @param {object} third point coordinates {x, y}
+       * @param {object} fourth point coordinates {x, y}
+       * @returns {number} point on a bezier curve for given t
+       */
+      function bezier(p1, p2, p3, p4, t) {
+        const firstDegreeLerpResult = firstDegreeLerp(p1, p2, p3, p4, t);
+        const secondDegreeLerpResult = secondDegreeLerp(
+          firstDegreeLerpResult[0],
+          firstDegreeLerpResult[1],
+          firstDegreeLerpResult[2],
+          t
+        );
+
+        return {
+          x: lerp(secondDegreeLerpResult[0].x, secondDegreeLerpResult[1].x, t),
+          y: lerp(secondDegreeLerpResult[0].y, secondDegreeLerpResult[1].y, t),
+        };
+      }
+    </script>
+    <script>
+      const canvasEl = document.getElementById("canvas");
+      const rangeEl = document.getElementById("range");
+      const tEl = document.getElementById("t");
+
+      const ctx = canvasEl?.getContext("2d");
+
+      // Constants
+      const GRANULARITY = 0.01;
+      const width = 800;
+      const height = 500;
+
+      // Colors
+      const backgroundColor = "#212830";
+      const primaryColor = "blue";
+      const secondaryColor = "rgba(100, 116, 139, 0.5)";
+      const accentColor = "red";
+
+      // Initialization
+      const handles = [
+        {
+          x: randomIntFromInterval(0, width),
+          y: randomIntFromInterval(0, height),
+          isDragging: false,
+        },
+        {
+          x: randomIntFromInterval(0, width),
+          y: randomIntFromInterval(0, height),
+          isDragging: false,
+        },
+        {
+          x: randomIntFromInterval(0, width),
+          y: randomIntFromInterval(0, height),
+          isDragging: false,
+        },
+        {
+          x: randomIntFromInterval(0, width),
+          y: randomIntFromInterval(0, height),
+          isDragging: false,
+        },
+      ];
+
+      rangeEl.value = Math.random().toFixed(2);
+      let t = parseFloat(rangeEl.value);
+      tEl.textContent = t;
+
+      // Drag functions
+      function dragStart(clientX, clientY, treshold) {
+        const boundingBox = canvasEl.getBoundingClientRect();
+
+        for (let i = 0; i < handles.length; i++) {
+          const handle = handles[i];
+
+          const x = handle.x + boundingBox.x;
+          const y = handle.y + boundingBox.y;
+
+          const isOnXAxis = clientX >= x - treshold && clientX <= x + treshold;
+          const isOnYAxis = clientY >= y - treshold && clientY <= y + treshold;
+
+          if (isOnXAxis && isOnYAxis) {
+            handle.isDragging = true;
+          }
+        }
+      }
+
+      function dragMove(clientX, clientY) {
+        const boundingBox = canvasEl.getBoundingClientRect();
+
+        const handleBeingDragged = handles.find((h) => h.isDragging);
+
+        if (!handleBeingDragged) return;
+
+        if (clientX < boundingBox.x) {
+          handleBeingDragged.x = 0;
+        } else if (clientX > boundingBox.x + boundingBox.width) {
+          handleBeingDragged.x = width;
+        } else {
+          handleBeingDragged.x = clientX - boundingBox.x;
+        }
+
+        if (clientY < boundingBox.y) {
+          handleBeingDragged.y = 0;
+        } else if (clientY > boundingBox.y + boundingBox.height) {
+          handleBeingDragged.y = height;
+        } else {
+          handleBeingDragged.y = clientY - boundingBox.y;
+        }
+
+        draw();
+      }
+
+      function dragEnd() {
+        handles.forEach((h) => (h.isDragging = false));
+      }
+
+      // Event listeners
+      document.addEventListener("mousedown", (e) => {
+        if (e.target !== canvasEl) return;
+
+        dragStart(e.clientX, e.clientY, 10);
+      });
+
+      document.addEventListener("mousemove", (e) => {
+        dragMove(e.clientX, e.clientY);
+      });
+
+      document.addEventListener("mouseup", (e) => {
+        dragEnd();
+      });
+
+      rangeEl.addEventListener("input", (e) => {
+        t = e.target.value;
+        tEl.textContent = t;
+        draw();
+      });
+
+      // Canvas functions
+      if (ctx) {
+        ctx.canvas.width = width;
+        ctx.canvas.height = height;
+
+        function clearCanvas() {
+          ctx.fillStyle = backgroundColor;
+          ctx.fillRect(0, 0, width, height);
+        }
+
+        function drawHandles() {
+          for (let index = 0; index < handles.length; index++) {
+            ctx.beginPath();
+            ctx.arc(handles[index].x, handles[index].y, 7, 0, 2 * Math.PI);
+            ctx.fillStyle = "#1b7fff";
+            ctx.fill();
+            ctx.closePath();
+          }
+        }
+
+        function drawLinesBetweenHandles() {
+          ctx.beginPath();
+          ctx.moveTo(handles[0].x, handles[0].y);
+          for (let index = 1; index < handles.length; index++) {
+            ctx.lineTo(handles[index].x, handles[index].y);
+          }
+          ctx.strokeStyle = secondaryColor;
+          ctx.stroke();
+          ctx.lineWidth = 1;
+          ctx.closePath();
+        }
+
+        function drawBezierCurve() {
+          ctx.beginPath();
+          ctx.moveTo(handles[0].x, handles[0].y);
+
+          for (let i = 0; i <= t; i += GRANULARITY) {
+            const point = bezier(
+              handles[0],
+              handles[1],
+              handles[2],
+              handles[3],
+              i
+            );
+            ctx.lineTo(point.x, point.y);
+          }
+
+          ctx.strokeStyle = accentColor;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.closePath();
+
+          ctx.beginPath();
+        }
+
+        function drawFirstDegreeLerps() {
+          const firstDegreeLerpResult = firstDegreeLerp(
+            handles[0],
+            handles[1],
+            handles[2],
+            handles[3],
+            t
+          );
+
+          ctx.beginPath();
+          ctx.moveTo(firstDegreeLerpResult[0].x, firstDegreeLerpResult[0].y);
+          ctx.lineTo(firstDegreeLerpResult[1].x, firstDegreeLerpResult[1].y);
+          ctx.lineTo(firstDegreeLerpResult[2].x, firstDegreeLerpResult[2].y);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = secondaryColor;
+          ctx.stroke();
+          ctx.closePath();
+
+          ctx.beginPath();
+          ctx.arc(
+            firstDegreeLerpResult[0].x,
+            firstDegreeLerpResult[0].y,
+            4,
+            0,
+            2 * Math.PI
+          );
+          ctx.arc(
+            firstDegreeLerpResult[1].x,
+            firstDegreeLerpResult[1].y,
+            4,
+            0,
+            2 * Math.PI
+          );
+          // ctx.arc(
+          //   firstDegreeLerpResult[2].x,
+          //   firstDegreeLerpResult[2].y,
+          //   4,
+          //   0,
+          //   2 * Math.PI
+          // );
+          ctx.fillStyle = secondaryColor;
+          ctx.fill();
+          ctx.closePath();
+        }
+
+        function drawSecondDegreeLerps() {
+          const firstDegreeLerpResult = firstDegreeLerp(
+            handles[0],
+            handles[1],
+            handles[2],
+            handles[3],
+            t
+          );
+
+          const secondDegreeLerpResult = secondDegreeLerp(
+            firstDegreeLerpResult[0],
+            firstDegreeLerpResult[1],
+            firstDegreeLerpResult[2],
+            t
+          );
+
+          ctx.beginPath();
+          ctx.moveTo(secondDegreeLerpResult[0].x, secondDegreeLerpResult[0].y);
+          ctx.lineTo(secondDegreeLerpResult[1].x, secondDegreeLerpResult[1].y);
+          ctx.strokeStyle = secondaryColor;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.closePath();
+
+          ctx.beginPath();
+          ctx.arc(
+            secondDegreeLerpResult[0].x,
+            secondDegreeLerpResult[0].y,
+            4,
+            0,
+            2 * Math.PI
+          );
+          ctx.arc(
+            secondDegreeLerpResult[1].x,
+            secondDegreeLerpResult[1].y,
+            4,
+            0,
+            2 * Math.PI
+          );
+          ctx.fillStyle = secondaryColor;
+          ctx.fill();
+          ctx.closePath();
+        }
+
+        function draw() {
+          clearCanvas();
+          drawSecondDegreeLerps();
+          drawFirstDegreeLerps();
+          drawLinesBetweenHandles();
+          drawBezierCurve();
+          drawHandles();
+        }
+
+        draw();
+      }
+    </script>
+  </body>
+</html>
